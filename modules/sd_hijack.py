@@ -13,6 +13,7 @@ import ldm.modules.diffusionmodules.model
 import ldm.modules.diffusionmodules.openaimodel
 import ldm.models.diffusion.ddim
 import ldm.models.diffusion.plms
+import ldm.models.diffusion.pndm
 import ldm.modules.encoders.modules
 
 attention_CrossAttention_forward = ldm.modules.attention.CrossAttention.forward
@@ -262,3 +263,4 @@ def register_buffer(self, name, attr):
 
 ldm.models.diffusion.ddim.DDIMSampler.register_buffer = register_buffer
 ldm.models.diffusion.plms.PLMSSampler.register_buffer = register_buffer
+ldm.models.diffusion.pndm.PNDMSampler.register_buffer = register_buffer

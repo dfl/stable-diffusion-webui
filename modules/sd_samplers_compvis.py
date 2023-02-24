@@ -1,6 +1,7 @@
 import math
 import ldm.models.diffusion.ddim
 import ldm.models.diffusion.plms
+import ldm.models.diffusion.pndm
 
 import numpy as np
 import torch
@@ -12,14 +13,19 @@ from modules import sd_samplers_common, prompt_parser, shared
 samplers_data_compvis = [
     sd_samplers_common.SamplerData('DDIM', lambda model: VanillaStableDiffusionSampler(ldm.models.diffusion.ddim.DDIMSampler, model), [], {}),
     sd_samplers_common.SamplerData('PLMS', lambda model: VanillaStableDiffusionSampler(ldm.models.diffusion.plms.PLMSSampler, model), [], {}),
+    sd_samplers_common.SamplerData('PNDM', lambda model: VanillaStableDiffusionSampler(ldm.models.diffusion.pndm.PNDMSampler, model), [], {}),
 ]
 
 
 class VanillaStableDiffusionSampler:
     def __init__(self, constructor, sd_model):
         self.sampler = constructor(sd_model)
-        self.is_plms = hasattr(self.sampler, 'p_sample_plms')
-        self.orig_p_sample_ddim = self.sampler.p_sample_plms if self.is_plms else self.sampler.p_sample_ddim
+        if hasattr(self.sampler, 'p_sample_plms')
+            self.orig_p_sample_ddim = self.sampler.p_sample_plms
+        elif hasattr(self.sampler, 'p_sample_pndm')
+            self.orig_p_sample_ddim = self.sampler.p_sample_pndm
+        else
+            self.orig_p_sample_ddim = self.sampler.p_sample_ddim
         self.mask = None
         self.nmask = None
         self.init_latent = None
@@ -61,7 +67,7 @@ class VanillaStableDiffusionSampler:
         conds_list, tensor = prompt_parser.reconstruct_multicond_batch(cond, self.step)
         unconditional_conditioning = prompt_parser.reconstruct_cond_batch(unconditional_conditioning, self.step)
 
-        assert all([len(conds) == 1 for conds in conds_list]), 'composition via AND is not supported for DDIM/PLMS samplers'
+        assert all([len(conds) == 1 for conds in conds_list]), 'composition via AND is not supported for DDIM/PLMS/PNDM samplers'
         cond = tensor
 
         # for DDIM, shapes must match, we can't just process cond and uncond independently;
@@ -104,7 +110,7 @@ class VanillaStableDiffusionSampler:
         if self.eta != 0.0:
             p.extra_generation_params["Eta DDIM"] = self.eta
 
-        for fieldname in ['p_sample_ddim', 'p_sample_plms']:
+        for fieldname in ['p_sample_ddim', 'p_sample_plms', 'p_sample_pndm']:
             if hasattr(self.sampler, fieldname):
                 setattr(self.sampler, fieldname, self.p_sample_ddim_hook)
 
@@ -112,7 +118,7 @@ class VanillaStableDiffusionSampler:
         self.nmask = p.nmask if hasattr(p, 'nmask') else None
 
     def adjust_steps_if_invalid(self, p, num_steps):
-        if (self.config.name == 'DDIM' and p.ddim_discretize == 'uniform') or (self.config.name == 'PLMS'):
+        if (self.config.name == 'DDIM' and p.ddim_discretize == 'uniform') or (self.config.name == 'PLMS') or (self.config.name == 'PNDM'):
             valid_step = 999 / (1000 // num_steps)
             if valid_step == math.floor(valid_step):
                 return int(valid_step) + 1
